@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockWise Inventory Manager</title>
+    <!-- Load Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .container-card {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+        .input-field {
+            border: 1px solid #e5e7eb;
+            transition: border-color 0.3s;
+        }
+        .input-field:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            outline: none;
+        }
+        /* Style for the inline table inputs */
+        .table-input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 tracking-tight mb-2">
+                StockWise Inventory
+            </h1>
+            <p class="text-gray-500">Real-Time Inventory Management with Inline Editing</p>
+            <div id="loading-indicator" class="mt-4 text-blue-500 hidden">Loading inventory...</div>
+        </header>
+
+        <!-- Current User ID Display (Crucial for multi-user/public data visibility) -->
+        <div id="user-info" class="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-700 mb-6">
+            <span class="font-semibold">App ID:</span> <span id="display-app-id" class="font-mono text-xs">...</span>
+            <br>
+            <span class="font-semibold">User ID:</span> <span id="display-user-id" class="font-mono text-xs">...</span>
+        </div>
+
+        <!-- Add Item Form -->
+        <div class="container-card bg-white p-6 rounded-xl mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Add New Stock</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" id="itemName" placeholder="Item Name" class="input-field p-3 rounded-lg md:col-span-2" required>
+                <input type="number" id="itemQuantity" placeholder="Qty" min="1" value="1" class="input-field p-3 rounded-lg" required>
+                <input type="number" id="itemPrice" placeholder="Price (USD)" min="0.01" step="0.01" class="input-field p-3 rounded-lg" required>
+                <button onclick="addItem()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-md transform hover:scale-[1.02]">
+                    Add Item
+                </button>
+            </div>
+        </div>
+
+        <!-- Inventory List & Summary -->
+        <div class="container-card bg-white p-6 rounded-xl">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Current Stock</h2>
+
+            <!-- Total Value Summary -->
+            <div class="mb-6 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+                <p class="text-lg font-medium text-gray-700">Total Inventory Value:</p>
+                <p id="totalValueDisplay" class="text-3xl font-bold text-yellow-700">$0.00</p>
+            </div>
+
+            <!-- Inventory Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                            <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Inventory items will be rendered here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <p id="emptyMessage" class="text-center text-gray-500 py-8 hidden">
+                Your inventory is currently empty. Start adding items above!
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Firebase SDK Imports (must use type="module") -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, query, setLogLevel, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Set Firebase Debug Logging
+    setLogLevel('Debug');
+
+    // --- GLOBAL VARIABLES (Provided by the environment) ---
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-inventory-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // --- FIREBASE INITIALIZATION AND AUTHENTICATION ---
+    let db, auth, currentUserId = null;
+    let isAuthReady = false;
+
+    // Initialize the Firebase app
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+
+    // Get HTML elements
+    const totalValueDisplay = document.getElementById('totalValueDisplay');
+    const inventoryTableBody = document.getElementById('inventoryTableBody');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const emptyMessage = document.getElementById('emptyMessage');
+    const displayAppId = document.getElementById('display-app-id');
+    const displayUserId = document.getElementById('display-user-id');
+
+    // Display App ID right away
+    displayAppId.textContent = appId;
+
+    /**
+     * Authenticates the user using the provided custom token or anonymously.
+     */
+    async function initializeAuth() {
+        try {
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Firebase authentication error:", error);
+            // Fallback for UI even if auth fails
+            currentUserId = crypto.randomUUID();
+            isAuthReady = true;
+            displayUserId.textContent = currentUserId + " (Anonymous Fallback)";
+        }
+    }
+
+    // Auth state listener: Runs immediately and whenever auth state changes
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUserId = user.uid;
+            displayUserId.textContent = user.uid;
+        } else {
+            // Should not happen if signInAnonymously succeeds, but handles external logouts
+            currentUserId = crypto.randomUUID();
+            displayUserId.textContent = currentUserId + " (Not Signed In)";
+        }
+        isAuthReady = true;
+        // Once auth is ready, set up the database listener
+        setupRealtimeListener();
+    });
+
+    // Run the initial authentication
+    initializeAuth();
+
+    // --- FIREBASE DATA FUNCTIONS ---
+
+    /**
+     * Generates the public collection path for the Inventory System.
+     * Stored in a public collection so the user can easily share/access it from anywhere.
+     */
+    function getCollectionPath() {
+        // Path: /artifacts/{appId}/public/data/inventory_system
+        return `artifacts/${appId}/public/data/inventory_system`;
+    }
+
+    /**
+     * Adds a new item to the Firestore database.
+     */
+    window.addItem = async function() {
+        if (!isAuthReady) {
+            console.error("Auth is not ready. Please wait.");
+            return;
+        }
+
+        const nameInput = document.getElementById('itemName');
+        const quantityInput = document.getElementById('itemQuantity');
+        const priceInput = document.getElementById('itemPrice');
+
+        const name = nameInput.value.trim();
+        const quantity = parseInt(quantityInput.value, 10);
+        const price = parseFloat(priceInput.value);
+
+        if (!name || isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0) {
+            // Using console.error instead of alert per instructions
+            console.error('Validation Error: Please enter valid item details (Name, Quantity > 0, Price > 0).');
+            return;
+        }
+
+        const newItem = {
+            name: name,
+            quantity: quantity,
+            price: price,
+            timestamp: Date.now(),
+        };
+
+        try {
+            const inventoryCollection = collection(db, getCollectionPath());
+            await addDoc(inventoryCollection, newItem);
+            
+            // Clear inputs after successful addition
+            nameInput.value = '';
+            quantityInput.value = '1';
+            priceInput.value = '';
+
+        } catch (e) {
+            console.error("Error adding document: ", e);
+        }
+    }
+
+    /**
+     * Updates an item in the Firestore database based on the current input values in the row.
+     * @param {string} itemId - The ID of the document to update.
+     */
+    window.updateItem = async function(itemId) {
+        if (!isAuthReady) {
+            console.error("Auth is not ready. Cannot update.");
+            return;
+        }
+        
+        // Get the values directly from the dynamic input fields in the table row
+        const quantityInput = document.getElementById(`qty-${itemId}`);
+        const priceInput = document.getElementById(`price-${itemId}`);
+        
+        const newQuantity = parseInt(quantityInput.value, 10);
+        const newPrice = parseFloat(priceInput.value);
+
+        if (isNaN(newQuantity) || newQuantity <= 0 || isNaN(newPrice) || newPrice <= 0) {
+            console.error('Update Error: Invalid Quantity or Price for item ID:', itemId);
+            // Optionally, reload the row data from the database to revert bad input
+            return;
+        }
+
+        try {
+            const itemRef = doc(db, getCollectionPath(), itemId);
+            await updateDoc(itemRef, {
+                quantity: newQuantity,
+                price: newPrice
+            });
+            console.log("Item updated successfully:", itemId);
+        } catch (e) {
+            console.error("Error updating document: ", e);
+        }
+    }
+
+    /**
+     * Deletes an item from the Firestore database.
+     * @param {string} itemId - The ID of the document to delete.
+     */
+    window.removeItem = async function(itemId) {
+        if (!isAuthReady) {
+            console.error("Auth is not ready. Cannot delete.");
+            return;
+        }
+
+        try {
+            const itemRef = doc(db, getCollectionPath(), itemId);
+            await deleteDoc(itemRef);
+            console.log("Item deleted successfully:", itemId);
+            // onSnapshot will handle the UI update automatically
+        } catch (e) {
+            console.error("Error deleting document: ", e);
+        }
+    }
+
+
+    /**
+     * Renders the current inventory to the table and updates the total value.
+     * @param {Array<Object>} inventory - Array of inventory items from Firestore.
+     */
+    function renderInventory(inventory) {
+        let totalValue = 0;
+        let html = '';
+
+        if (inventory.length === 0) {
+            emptyMessage.classList.remove('hidden');
+            inventoryTableBody.innerHTML = '';
+            totalValueDisplay.textContent = '$0.00';
+            loadingIndicator.classList.add('hidden');
+            return;
+        }
+        
+        emptyMessage.classList.add('hidden');
+
+        // Sort items by name
+        inventory.sort((a, b) => (a.name > b.name) ? 1 : -1);
+
+        inventory.forEach(item => {
+            const itemTotal = item.quantity * item.price;
+            totalValue += itemTotal;
+
+            html += `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${item.name}</td>
+                    
+                    <!-- Quantity Input (Editable) -->
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        <input id="qty-${item.id}" type="number" min="1" value="${item.quantity}" 
+                               class="table-input w-20 text-sm">
+                    </td>
+                    
+                    <!-- Price Input (Editable) -->
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        <input id="price-${item.id}" type="number" min="0.01" step="0.01" value="${item.price.toFixed(2)}"
+                               class="table-input w-24 text-sm">
+                    </td>
+                    
+                    <td class="px-6 py-4 text-sm font-semibold text-indigo-600">$${itemTotal.toFixed(2)}</td>
+                    
+                    <!-- Actions: Update and Delete -->
+                    <td class="px-6 py-4 text-right text-sm font-medium flex space-x-2 justify-end">
+                        <button onclick="updateItem('${item.id}')" 
+                                class="text-green-600 hover:text-green-800 transition duration-150 p-1 rounded-full hover:bg-green-100" title="Save Changes">
+                            <!-- Save/Update Icon (Checkmark) -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        
+                        <button onclick="removeItem('${item.id}')" 
+                                class="text-red-600 hover:text-red-800 transition duration-150 p-1 rounded-full hover:bg-red-100" title="Delete Item">
+                            <!-- Trash Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 100 2v6a1 1 0 100-2V8z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        inventoryTableBody.innerHTML = html;
+        totalValueDisplay.textContent = `$${totalValue.toFixed(2)}`;
+        loadingIndicator.classList.add('hidden');
+    }
+
+    /**
+     * Sets up a real-time listener to the Firestore collection.
+     */
+    function setupRealtimeListener() {
+        if (!isAuthReady) {
+            console.error("Cannot set up listener: Auth is not ready.");
+            return;
+        }
+        
+        loadingIndicator.classList.remove('hidden');
+
+        const q = query(collection(db, getCollectionPath()));
+
+        // onSnapshot listens for changes in the database in real-time
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const inventory = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                inventory.push({
+                    id: doc.id,
+                    name: data.name,
+                    // Ensure numbers are parsed correctly for calculations
+                    quantity: parseInt(data.quantity, 10), 
+                    price: parseFloat(data.price),
+                    timestamp: data.timestamp
+                });
+            });
+            renderInventory(inventory);
+        }, (error) => {
+            console.error("Error fetching data from Firestore: ", error);
+            loadingIndicator.classList.add('hidden');
+            inventoryTableBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Error loading data. Check console.</td></tr>';
+        });
+
+        // The unsubscribe function can be used to stop listening to updates later if needed.
+    }
+
+    // Expose functions to the global scope so they can be called from HTML onclick attributes
+    window.addItem = addItem;
+    window.removeItem = removeItem;
+    window.updateItem = updateItem;
+</script>
+
+</body>
+</html>

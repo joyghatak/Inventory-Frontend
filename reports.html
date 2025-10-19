@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 hover:bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 hover:bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 hover:bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 hover:bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 hover:bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto">
+    <h1 class="text-2xl font-bold mb-6">Reports</h1>
+
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Summary</h2>
+      <ul id="summaryList" class="space-y-2">
+        <li class="loading-item">Loading report data...</li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ** IMPORTANT: This endpoint fetches all summary totals. **
+  const API_URL = 'http://localhost:5500/api/dashboard/summary';
+  const summaryList = document.getElementById('summaryList');
+
+  // --- Utility: Format currency ---
+  const formatCurrency = (amount) => {
+    // Assuming Indian Rupees based on original HTML context
+    return `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+  };
+
+  // --- 1. FETCH AND RENDER REPORT DATA ---
+  async function fetchReportData() {
+    try {
+      const response = await fetch(API_URL);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data = await response.json();
+      renderReport(data);
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+      summaryList.innerHTML = `<li class="text-red-600">Error fetching reports: ${error.message}.</li>`;
+    }
+  }
+
+  function renderReport(data) {
+    summaryList.innerHTML = ''; // Clear loading status
+
+    // Ensure all required fields exist (even if 0)
+    const totalProducts = data.totalProducts || 0;
+    const totalSales = data.totalSales || 0;
+    const totalPurchases = data.totalPurchases || 0;
+    const totalSuppliers = data.totalSuppliers || 0;
+    const totalCustomers = data.totalCustomers || 0;
+    
+    // Calculate Net Profit (simple profit calculation)
+    const netProfit = totalSales - totalPurchases;
+    const profitColor = netProfit >= 0 ? 'text-green-700' : 'text-red-700';
+
+    summaryList.innerHTML = `
+      <li>📦 Total Products: <b>${totalProducts}</b></li>
+      <li>💰 Total Sales: <b>${formatCurrency(totalSales)}</b></li>
+      <li>📥 Total Purchases: <b>${formatCurrency(totalPurchases)}</b></li>
+      <li class="${profitColor}">📈 Net Profit: <b>${formatCurrency(netProfit)}</b></li>
+      <li>🚚 Total Suppliers: <b>${totalSuppliers}</b></li>
+      <li>👤 Total Customers: <b>${totalCustomers}</b></li>
+    `;
+  }
+
+  // Load data when the page opens
+  fetchReportData();
+</script>
+</body>
+</html>

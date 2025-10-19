@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logging Out | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 hover:bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 hover:bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 hover:bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 hover:bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 hover:bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto flex items-center justify-center">
+    <div class="bg-white p-8 rounded-xl shadow-lg text-center max-w-md w-full">
+      <h1 class="text-3xl font-bold mb-4 text-blue-700">👋 Logging Out...</h1>
+      <p class="text-gray-600 mb-6">You have successfully been logged out of the Inventory System.</p>
+      <p class="text-sm text-gray-500">You will be redirected to the **login page** shortly.</p>
+      
+      <div class="flex justify-center mt-6">
+        <svg id="loadingSpinner" class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+    // ** IMPORTANT: Ensure this port matches your running backend port! **
+    const LOGOUT_API_URL = 'http://localhost:5500/api/auth/logout';
+    
+    // helper to read query params
+    function getQueryParam(name) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    }
+
+    // Function to handle the full logout process
+    async function handleLogout() {
+        const redirect = getQueryParam('redirect') || 'login.html';
+        
+        try {
+            // 1. Notify the backend to invalidate the user session/token
+            const response = await fetch(LOGOUT_API_URL, {
+                method: 'POST',
+                headers: {
+                    // Include any necessary token/credentials here
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                console.warn('Backend logout failed, but proceeding with client logout.');
+            }
+
+        } catch (error) {
+            console.error('Error contacting logout endpoint:', error);
+            // We still proceed with client-side cleanup and redirect even if the API call fails
+        }
+        
+        // 2. Client-side cleanup (as per original logic)
+        sessionStorage.clear();
+        localStorage.clear();
+
+        // 3. Redirect after 3 seconds
+        setTimeout(() => {
+            window.location.href = redirect;
+        }, 3000);
+    }
+
+    // Start the logout process when the page loads
+    handleLogout();
+
+    // The function below is preserved from the original file but not used by handleLogout()
+    function logout() {
+        const redirect = getQueryParam('redirect') || 'login.html'; 
+        sessionStorage.clear();
+        localStorage.clear();
+        window.location.href = redirect;
+    }
+</script>
+</body>
+</html>

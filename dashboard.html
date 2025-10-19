@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 hover:bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 hover:bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 hover:bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 hover:bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 hover:bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto">
+    <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h2 class="text-gray-500 text-sm">Total Products</h2>
+        <p id="totalProducts" class="text-3xl font-bold text-blue-700">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h2 class="text-gray-500 text-sm">Low Stock Items</h2>
+        <p id="lowStockItems" class="text-3xl font-bold text-red-600">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h2 class="text-gray-500 text-sm">Total Suppliers</h2>
+        <p id="totalSuppliers" class="text-3xl font-bold text-green-600">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h2 class="text-gray-500 text-sm">Total Sales (₹)</h2>
+        <p id="totalSales" class="text-3xl font-bold text-indigo-600">Loading...</p>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Recent Transactions</h2>
+      <table class="w-full border-collapse text-left">
+        <thead>
+          <tr class="bg-gray-100 text-gray-600">
+            <th class="p-2">Date</th>
+            <th class="p-2">Type</th>
+            <th class="p-2">Product</th>
+            <th class="p-2">Qty</th>
+            <th class="p-2">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="transactionsTableBody">
+          <tr><td colspan="5" class="p-2 text-center text-gray-500">Fetching recent transactions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ** IMPORTANT: Ensure this port matches your running backend port! **
+  const API_SUMMARY_URL = 'http://localhost:5500/api/dashboard/summary';
+  const API_SALES_URL = 'http://localhost:5500/api/sales';
+  const API_PURCHASES_URL = 'http://localhost:5500/api/purchases';
+  const transactionsTableBody = document.getElementById('transactionsTableBody');
+
+  // --- Utility Functions ---
+  const formatCurrency = (amount) => `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+  const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
+  const updateCard = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value.toLocaleString();
+  };
+
+  // --- 1. Fetch Summary Data (Cards) ---
+  async function fetchSummary() {
+    try {
+      const response = await fetch(API_SUMMARY_URL);
+      if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
+      const data = await response.json();
+
+      updateCard('totalProducts', data.totalProducts);
+      updateCard('lowStockItems', data.lowStockItems);
+      updateCard('totalSuppliers', data.totalSuppliers);
+      document.getElementById('totalSales').textContent = formatCurrency(data.totalSales);
+
+    } catch (error) {
+      console.error('Error fetching dashboard summary:', error);
+      document.querySelectorAll('#totalProducts, #lowStockItems, #totalSuppliers, #totalSales').forEach(el => {
+        el.textContent = 'N/A';
+        el.className = 'text-3xl font-bold text-red-600';
+      });
+    }
+  }
+
+  // --- 2. Fetch Recent Transactions ---
+  async function fetchTransactions() {
+    transactionsTableBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-500">Fetching recent transactions...</td></tr>';
+    
+    try {
+      // Fetch all sales and purchases
+      const [salesResponse, purchasesResponse] = await Promise.all([
+        fetch(API_SALES_URL),
+        fetch(API_PURCHASES_URL)
+      ]);
+
+      const sales = await salesResponse.json();
+      const purchases = await purchasesResponse.json();
+      
+      const allTransactions = [
+        ...sales.map(t => ({ 
+          date: t.date, 
+          type: 'SALE', 
+          product: t.product_id ? t.product_id.name : 'Unknown', 
+          qty: t.quantity, 
+          amount: t.total_price 
+        })),
+        ...purchases.map(t => ({ 
+          date: t.date, 
+          type: 'PURCHASE', 
+          product: t.product_id ? t.product_id.name : 'Unknown', 
+          qty: t.quantity, 
+          amount: t.total_cost 
+        }))
+      ];
+
+      // Sort by date (newest first) and limit to 5
+      allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const recentTransactions = allTransactions.slice(0, 5); 
+
+      renderTransactions(recentTransactions);
+
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      transactionsTableBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-red-500">Failed to load transactions from API.</td></tr>';
+    }
+  }
+
+  function renderTransactions(transactions) {
+    transactionsTableBody.innerHTML = '';
+    if (transactions.length === 0) {
+      transactionsTableBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-500">No recent transactions found.</td></tr>';
+      return;
+    }
+
+    transactions.forEach(t => {
+      const row = transactionsTableBody.insertRow();
+      row.className = 'border-t';
+      
+      row.insertCell().textContent = formatDate(t.date);
+      row.insertCell().innerHTML = `<span class="font-semibold text-${t.type === 'SALE' ? 'red-500' : 'green-600'}">${t.type}</span>`;
+      row.insertCell().textContent = t.product;
+      row.insertCell().textContent = t.qty;
+      row.insertCell().textContent = formatCurrency(t.amount);
+    });
+  }
+
+  // Load all data on page load
+  window.onload = () => {
+    fetchSummary();
+    fetchTransactions();
+  };
+</script>
+</body>
+</html>

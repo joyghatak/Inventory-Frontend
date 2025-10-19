@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 hover:bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 hover:bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 hover:bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 hover:bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 hover:bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto">
+    <h1 class="text-2xl font-bold mb-6">Sales</h1>
+
+    <div class="bg-white p-4 rounded-xl shadow mb-6">
+      <h2 class="text-lg font-semibold mb-4">Record New Sale (Stock Out)</h2>
+      <form id="recordSaleForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <input type="text" id="productInput" placeholder="Product ID" required class="border rounded-lg px-3 py-2">
+        <input type="text" id="customerInput" placeholder="Customer ID" required class="border rounded-lg px-3 py-2">
+        <input type="number" id="quantityInput" placeholder="Quantity" required min="1" class="border rounded-lg px-3 py-2">
+        <input type="number" id="totalPriceInput" placeholder="Total Price" required min="0" class="border rounded-lg px-3 py-2">
+        <button type="submit" class="bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 col-span-1 md:col-span-4">Record Sale</button>
+      </form>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Sales Records</h2>
+      <table class="w-full border-collapse text-left">
+        <thead>
+          <tr class="bg-gray-100 text-gray-600">
+            <th class="p-2">Date</th>
+            <th class="p-2">Product</th>
+            <th class="p-2">Customer</th>
+            <th class="p-2">Qty</th>
+            <th class="p-2">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="salesTableBody">
+          </tbody>
+      </table>
+      <p id="loadingStatus" class="mt-4 text-gray-500">Loading sales records...</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ** IMPORTANT: Ensure this port matches your running backend port! **
+  const API_BASE_URL = 'http://localhost:5500/api/sales';
+  const tableBody = document.getElementById('salesTableBody');
+  const loadingStatus = document.getElementById('loadingStatus');
+
+  // --- Utility: Convert Date to readable format ---
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+  const formatCurrency = (amount) => `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+
+  // --- 1. FETCH AND RENDER SALES DATA ---
+  async function fetchSales() {
+    try {
+      const response = await fetch(API_BASE_URL);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const sales = await response.json();
+      renderSales(sales);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
+      loadingStatus.textContent = `Error loading sales: ${error.message}. Is the backend running on ${API_BASE_URL}?`;
+    }
+  }
+
+  function renderSales(sales) {
+    tableBody.innerHTML = ''; 
+    loadingStatus.style.display = 'none';
+
+    if (sales.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-500">No sales records found.</td></tr>';
+      return;
+    }
+
+    sales.forEach(sale => {
+      const row = tableBody.insertRow();
+      row.className = 'border-t';
+      
+      row.insertCell().textContent = formatDate(sale.date);
+      row.insertCell().textContent = sale.product_id ? sale.product_id.name : 'Unknown Product';
+      row.insertCell().textContent = sale.customer_id ? sale.customer_id.name : 'Unknown Customer';
+      row.insertCell().textContent = sale.quantity;
+      row.insertCell().textContent = formatCurrency(sale.total_price);
+    });
+  }
+
+  // --- 2. HANDLE FORM SUBMISSION (RECORD NEW SALE) ---
+  document.getElementById('recordSaleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // NOTE: The user must enter the MongoDB ID here.
+    const product_id = document.getElementById('productInput').value;
+    const customer_id = document.getElementById('customerInput').value;
+    const quantity = document.getElementById('quantityInput').value;
+    const total_price = document.getElementById('totalPriceInput').value;
+
+    const newSale = { 
+        product_id, 
+        customer_id, 
+        quantity: parseInt(quantity), 
+        total_price: parseFloat(total_price)
+    };
+
+    try {
+      const response = await fetch(API_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newSale),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.message || 'Failed to record sale. Check input IDs.');
+      }
+
+      document.getElementById('recordSaleForm').reset();
+      fetchSales(); 
+      alert('Sale recorded and stock decremented successfully!');
+
+    } catch (error) {
+      console.error('Error recording sale:', error);
+      alert('Error: ' + error.message);
+    }
+  });
+
+  // Load data when the page opens
+  fetchSales();
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suppliers | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 hover:bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 hover:bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 hover:bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 hover:bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 hover:bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto">
+    <h1 class="text-2xl font-bold mb-6">Suppliers</h1>
+
+    <!-- Add Supplier Form -->
+    <div class="bg-white p-4 rounded-xl shadow mb-4">
+      <form id="addSupplierForm" class="grid grid-cols-1 md:grid-cols-4 gap-4" onsubmit="event.preventDefault(); addSupplier();">
+        <input id="supplierName" type="text" placeholder="Supplier Name" class="border rounded-lg px-3 py-2 md:col-span-2" required>
+        <input id="supplierContact" type="text" placeholder="Contact Number" class="border rounded-lg px-3 py-2" required>
+        <input id="supplierEmail" type="email" placeholder="Email (Optional)" class="border rounded-lg px-3 py-2">
+        <button type="submit" class="bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 md:col-span-4">Add Supplier</button>
+      </form>
+    </div>
+
+    <!-- Status Message Box -->
+    <div id="statusMessage" class="hidden p-3 mb-4 rounded-lg text-center font-medium"></div>
+
+    <!-- Supplier List -->
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Supplier List</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full border-collapse text-left">
+          <thead>
+            <tr class="bg-gray-100 text-gray-600">
+              <th class="p-2">ID</th>
+              <th class="p-2">Name</th>
+              <th class="p-2">Contact</th>
+              <th class="p-2">Email</th>
+            </tr>
+          </thead>
+          <tbody id="suppliersTableBody">
+            <tr class="border-t">
+              <td colspan="4" class="p-4 text-center text-gray-500">Loading suppliers...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // FIX: Set API port to 5500 to match the running Node.js server
+  const API_BASE_URL = 'http://localhost:5500/api';
+  const tableBody = document.getElementById('suppliersTableBody');
+  const statusMessage = document.getElementById('statusMessage');
+
+  // --- Utility Functions ---
+  function showStatus(message, isError = false) {
+    statusMessage.textContent = message;
+    statusMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+    if (isError) {
+      statusMessage.classList.add('bg-red-100', 'text-red-700');
+    } else {
+      statusMessage.classList.add('bg-green-100', 'text-green-700');
+    }
+    setTimeout(() => {
+      statusMessage.classList.add('hidden');
+    }, 3000);
+  }
+
+  // --- Data Loading and Rendering ---
+  async function loadSuppliers() {
+    tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Loading suppliers...</td></tr>';
+    try {
+      const response = await fetch(`${API_BASE_URL}/suppliers`, { mode: 'cors' });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const suppliers = await response.json();
+      renderSuppliers(suppliers);
+
+    } catch (error) {
+      console.error('Network Error:', error);
+      tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Network error: Could not connect to the API. Please ensure the backend is running on ${API_BASE_URL.replace('/api', '')}.</td></tr>`;
+      showStatus('Error loading suppliers.', true);
+    }
+  }
+
+  function renderSuppliers(suppliers) {
+    if (suppliers.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No suppliers found. Add a new supplier above.</td></tr>';
+      return;
+    }
+
+    tableBody.innerHTML = suppliers.map(supplier => `
+      <tr class="border-t hover:bg-gray-50">
+        <td class="p-2 text-sm">${supplier._id.substring(0, 6)}...</td>
+        <td class="p-2 text-sm">${supplier.name}</td>
+        <td class="p-2 text-sm">${supplier.contact_number}</td>
+        <td class="p-2 text-sm">${supplier.email || 'N/A'}</td>
+      </tr>
+    `).join('');
+  }
+
+  // --- CRUD Operation: Add Supplier ---
+  async function addSupplier() {
+    // Get values from form inputs
+    const name = document.getElementById('supplierName').value;
+    const contact_number = document.getElementById('supplierContact').value;
+    const email = document.getElementById('supplierEmail').value;
+
+    if (!name || !contact_number) {
+        showStatus("Please enter a Name and Contact Number.", true);
+        return;
+    }
+
+    const newSupplier = { name, contact_number, email };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/suppliers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSupplier),
+            mode: 'cors'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `Failed to add supplier (Status: ${response.status})`);
+        }
+
+        document.getElementById('addSupplierForm').reset();
+        showStatus('Supplier added successfully!');
+        loadSuppliers(); // Refresh list
+
+    } catch (error) {
+        console.error('Add Supplier Error:', error);
+        showStatus(`Error: ${error.message}`, true);
+    }
+  }
+
+  // Load suppliers when the page finishes loading
+  window.onload = loadSuppliers;
+</script>
+</body>
+</html>

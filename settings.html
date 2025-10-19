@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings | Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="flex h-screen">
+
+  <aside class="w-64 bg-blue-700 text-white flex flex-col">
+    <div class="p-4 text-2xl font-bold border-b border-blue-600">Inventory App</div>
+    <nav class="flex-1 p-4 space-y-2 text-sm">
+      <a href="dashboard.html" class="block p-2 hover:bg-blue-600 rounded">🏠 Dashboard</a>
+      <a href="products.html" class="block p-2 hover:bg-blue-600 rounded">📦 Products</a>
+      <a href="suppliers.html" class="block p-2 hover:bg-blue-600 rounded">🚚 Suppliers</a>
+      <a href="customers.html" class="block p-2 hover:bg-blue-600 rounded">👤 Customers</a>
+      <a href="purchases.html" class="block p-2 hover:bg-blue-600 rounded">📥 Purchases</a>
+      <a href="sales.html" class="block p-2 hover:bg-blue-600 rounded">💰 Sales</a>
+      <a href="reports.html" class="block p-2 hover:bg-blue-600 rounded">📊 Reports</a>
+      <a href="settings.html" class="block p-2 bg-blue-600 rounded">⚙️ Settings</a>
+      <a href="login.html" class="block p-2 text-red-300 hover:bg-red-600 rounded">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-auto">
+    <h1 class="text-2xl font-bold mb-6">Settings</h1>
+
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Change Admin Password</h2>
+      <form id="changePasswordForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input type="password" id="oldPassword" placeholder="Old Password" required class="border rounded-lg px-3 py-2">
+        <input type="password" id="newPassword" placeholder="New Password" required class="border rounded-lg px-3 py-2">
+        <button type="submit" class="bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 col-span-1 md:col-span-2">Update Password</button>
+      </form>
+      <p id="message" class="mt-4 text-sm text-gray-700"></p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ** IMPORTANT: This assumes you have an authentication/user route set up. **
+  const API_URL = 'http://localhost:5500/api/auth/password'; // Assuming this endpoint handles password changes
+  const form = document.getElementById('changePasswordForm');
+  const message = document.getElementById('message');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const oldPassword = document.getElementById('oldPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+
+    if (oldPassword === newPassword) {
+        message.textContent = 'Error: New password cannot be the same as the old password.';
+        message.className = 'mt-4 text-sm text-red-600';
+        return;
+    }
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'PUT', // PUT is standard for updates
+        headers: {
+          'Content-Type': 'application/json',
+          // In a real app, you would include an Authorization header here (e.g., JWT token)
+        },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+      
+      const responseData = await response.json();
+
+      if (response.ok) {
+        message.textContent = responseData.message || 'Password updated successfully!';
+        message.className = 'mt-4 text-sm text-green-600';
+        form.reset();
+      } else {
+        // Handle specific errors like "Incorrect old password" or "Password too weak"
+        throw new Error(responseData.message || 'Failed to update password.');
+      }
+
+    } catch (error) {
+      console.error('Error updating password:', error);
+      message.textContent = 'Error: ' + error.message;
+      message.className = 'mt-4 text-sm text-red-600';
+    }
+  });
+</script>
+</body>
+</html>
